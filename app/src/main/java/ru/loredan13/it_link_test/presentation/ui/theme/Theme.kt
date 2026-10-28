@@ -1,6 +1,5 @@
-package ru.loredan13.it_link_test.ui.theme
+package ru.loredan13.it_link_test.presentation.ui.theme
 
-import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme

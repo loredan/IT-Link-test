@@ -1,4 +1,4 @@
-package ru.loredan13.it_link_test
+package ru.loredan13.it_link_test.presentation
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -11,10 +11,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import ru.loredan13.it_link_test.ui.theme.ITLinkTestTheme
+import dagger.hilt.android.AndroidEntryPoint
+import ru.loredan13.it_link_test.presentation.ui.theme.ITLinkTestTheme
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        applicationInfo
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {

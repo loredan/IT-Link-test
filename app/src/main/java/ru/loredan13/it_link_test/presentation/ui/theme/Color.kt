@@ -1,4 +1,4 @@
-package ru.loredan13.it_link_test.ui.theme
+package ru.loredan13.it_link_test.presentation.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
