@@ -4,8 +4,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
-class DiskCacheDataSource(private val cacheFile: File) {
-    suspend fun getImageList(): Result<List<String>> {
+interface DiskCacheDataSource {
+    suspend fun getImageList(): Result<List<String>>
+    suspend fun writeImageList(images: List<String>)
+}
+
+class DiskCacheDataSourceImpl(private val cacheFile: File) : DiskCacheDataSource {
+    override suspend fun getImageList(): Result<List<String>> {
         return try {
             val lines = withContext(Dispatchers.IO) { cacheFile.readLines() }
             Result.success(lines)
@@ -14,9 +19,9 @@ class DiskCacheDataSource(private val cacheFile: File) {
         }
     }
 
-    suspend fun writeImageList(imageList: List<String>) {
+    override suspend fun writeImageList(images: List<String>) {
         withContext(Dispatchers.IO) {
-            cacheFile.writeText(imageList.joinToString("\n"))
+            cacheFile.writeText(images.joinToString("\n"))
         }
     }
 }

@@ -55,7 +55,10 @@ dependencies {
     implementation(libs.ktor.client.cio)
     implementation(libs.ktor.client.logging)
 
+    testImplementation(kotlin("test"))
     testImplementation(libs.junit)
+    testImplementation(libs.kotlin.coroutines.test)
+    testImplementation(libs.turbine)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)

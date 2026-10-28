@@ -3,9 +3,7 @@ package ru.loredan13.it_link_test.presentation.di
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.util.Log
-import dagger.hilt.android.qualifiers.ApplicationContext
-import ru.loredan13.it_link_test.domain.datasource.NetworkLogger
-import javax.inject.Inject
+import ru.loredan13.it_link_test.domain.datasource.network.NetworkLogger
 
 class DebugAwareLogger(context: Context) : NetworkLogger {
     private val isDebuggable =

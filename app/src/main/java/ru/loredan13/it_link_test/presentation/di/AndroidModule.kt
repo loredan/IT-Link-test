@@ -7,7 +7,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import ru.loredan13.it_link_test.domain.datasource.DiskCacheDataSource
-import ru.loredan13.it_link_test.domain.datasource.NetworkLogger
+import ru.loredan13.it_link_test.domain.datasource.DiskCacheDataSourceImpl
+import ru.loredan13.it_link_test.domain.datasource.network.NetworkLogger
 import javax.inject.Singleton
 
 @Module
@@ -21,5 +22,5 @@ object AndroidModule {
     @Provides
     @Singleton
     fun provideDiskCacheDataSource(@ApplicationContext context: Context): DiskCacheDataSource =
-        DiskCacheDataSource(context.cacheDir.resolve("images.txt"))
+        DiskCacheDataSourceImpl(context.cacheDir.resolve("images.txt"))
 }

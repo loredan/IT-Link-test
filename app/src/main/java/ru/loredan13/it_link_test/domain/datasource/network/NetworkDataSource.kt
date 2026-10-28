@@ -1,4 +1,4 @@
-package ru.loredan13.it_link_test.domain.datasource
+package ru.loredan13.it_link_test.domain.datasource.network
 
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -10,7 +10,11 @@ import io.ktor.client.statement.bodyAsText
 import kotlinx.io.IOException
 import javax.inject.Inject
 
-class NetworkDataSource @Inject constructor(networkLogger: NetworkLogger) {
+interface NetworkDataSource {
+    suspend fun getImageList(): Result<List<String>>
+}
+
+class NetworkDataSourceImpl @Inject constructor(networkLogger: NetworkLogger) : NetworkDataSource {
     val client = HttpClient(CIO) {
         install(Logging) {
             logger = object : Logger {
@@ -22,7 +26,7 @@ class NetworkDataSource @Inject constructor(networkLogger: NetworkLogger) {
         }
     }
 
-    suspend fun getImageList(): Result<List<String>> {
+    override suspend fun getImageList(): Result<List<String>> {
         val url = "https://it-link.ru/test/images.txt"
         val response = client.get(url)
         return if (response.status.value == 200)
