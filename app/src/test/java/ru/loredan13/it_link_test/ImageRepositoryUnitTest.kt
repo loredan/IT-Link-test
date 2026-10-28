@@ -4,37 +4,51 @@ import app.cash.turbine.test
 import junit.framework.TestCase.assertEquals
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.asFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import org.junit.Test
 import ru.loredan13.it_link_test.domain.datasource.DiskCacheDataSource
 import ru.loredan13.it_link_test.domain.datasource.network.NetworkDataSource
 import ru.loredan13.it_link_test.domain.repository.ImageRepository
+import ru.loredan13.it_link_test.domain.util.LoadState
 import java.io.IOException
 import kotlin.test.assertFailsWith
 import kotlin.time.Duration.Companion.seconds
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class ImageRepositoryUnitTest {
     @Test
-    fun `network fail, cache fail - emit nothing`(): Unit = runTest {
-        val network = FakeNetworkDataSource(result = Result.failure(IOException()))
-        val cache = FakeDiskCacheDataSource()
-        val repository = ImageRepository(network, cache)
+    fun `network fail, cache fail - emit error`(): Unit = runTest {
+        val exception = IOException()
+        val network = FakeNetworkDataSource(result = Result.failure(exception))
+        val cache = FakeDiskCacheDataSource(cached = Result.failure(exception))
+        val repository = ImageRepository(network, cache, backgroundScope)
 
-        repository.getImageList().test { awaitComplete() }
+        runCurrent()
+
+        assertEquals(LoadState.Error<List<String>>(exception), repository.imageList.value)
     }
 
     @Test
-    fun `network fail, cache ok - cached list`(): Unit = runTest {
+    fun `network fail, cache ok - emit cached list`(): Unit = runTest {
         val list = listOf("1", "2")
         val network = FakeNetworkDataSource(result = Result.failure(IOException()))
         val cache = FakeDiskCacheDataSource(cached = Result.success(list))
-        val repository = ImageRepository(network, cache)
+        val repository = ImageRepository(network, cache, backgroundScope)
 
-        repository.getImageList().test {
-            assertEquals(list, awaitItem())
-            awaitComplete()
+        repository.imageList.test {
+            assertEquals(LoadState.Loading(null), awaitItem())
+            assertEquals(LoadState.Loading(list), awaitItem())
+            assertEquals(LoadState.Success(list), awaitItem())
         }
     }
 
@@ -42,12 +56,12 @@ class ImageRepositoryUnitTest {
     fun `network ok, cache fail - emit list, write to cache`(): Unit = runTest {
         val list = listOf("1", "2")
         val network = FakeNetworkDataSource(result = Result.success(list))
-        val cache = FakeDiskCacheDataSource()
-        val repository = ImageRepository(network, cache)
+        val cache = FakeDiskCacheDataSource(cached = Result.failure(IOException()))
+        val repository = ImageRepository(network, cache, backgroundScope)
 
-        repository.getImageList().test {
-            assertEquals(list, awaitItem())
-            awaitComplete()
+        repository.imageList.test {
+            assertEquals(LoadState.Loading(null), awaitItem())
+            assertEquals(LoadState.Success(list), awaitItem())
             assertEquals(listOf(list), cache.written)
         }
     }
@@ -59,12 +73,12 @@ class ImageRepositoryUnitTest {
             val list = listOf("1", "2", "3")
             val network = FakeNetworkDataSource(result = Result.success(list))
             val cache = FakeDiskCacheDataSource(cached = Result.success(cachedList))
-            val repository = ImageRepository(network, cache)
+            val repository = ImageRepository(network, cache, backgroundScope)
 
-            repository.getImageList().test {
-                assertEquals(cachedList, awaitItem())
-                assertEquals(list, awaitItem())
-                awaitComplete()
+            repository.imageList.test {
+                assertEquals(LoadState.Loading(null), awaitItem())
+                assertEquals(LoadState.Loading(cachedList), awaitItem())
+                assertEquals(LoadState.Success(list), awaitItem())
                 assertEquals(listOf(list), cache.written)
             }
         }
@@ -77,28 +91,29 @@ class ImageRepositoryUnitTest {
             val gate = CompletableDeferred<Unit>()
             val network = FakeNetworkDataSource(result = Result.success(list))
             val cache = FakeDiskCacheDataSource(cached = Result.success(cachedList), gate = gate)
-            val repository = ImageRepository(network, cache)
+            val repository = ImageRepository(network, cache, backgroundScope)
 
-            repository.getImageList().test {
+            repository.imageList.test {
+                assertEquals(LoadState.Loading(null), awaitItem())
                 delay(1.seconds)
                 gate.complete(Unit)
-                assertEquals(cachedList, awaitItem())
-                assertEquals(list, awaitItem())
-                awaitComplete()
+                assertEquals(LoadState.Loading(cachedList), awaitItem())
+                assertEquals(LoadState.Success(list), awaitItem())
                 assertEquals(listOf(list), cache.written)
             }
         }
 
     @Test
-    fun `network ok, cache ok, same list - emit cached`(): Unit = runTest {
+    fun `network ok, cache ok, same list - emit cached list`(): Unit = runTest {
         val list = listOf("1", "2", "3")
         val network = FakeNetworkDataSource(result = Result.success(list))
         val cache = FakeDiskCacheDataSource(cached = Result.success(list))
-        val repository = ImageRepository(network, cache)
+        val repository = ImageRepository(network, cache, backgroundScope)
 
-        repository.getImageList().test {
-            assertEquals(list, awaitItem())
-            awaitComplete()
+        repository.imageList.test {
+            assertEquals(LoadState.Loading(null), awaitItem())
+            assertEquals(LoadState.Loading(list), awaitItem())
+            assertEquals(LoadState.Success(list), awaitItem())
             assert(cache.written.isEmpty())
         }
     }
@@ -108,11 +123,11 @@ class ImageRepositoryUnitTest {
         val list = listOf("1", "2", "3")
         val network = FakeNetworkDataSource(result = Result.success(list))
         val cache = FakeDiskCacheDataSource(cached = Result.success(emptyList()))
-        val repository = ImageRepository(network, cache)
+        val repository = ImageRepository(network, cache, backgroundScope)
 
-        repository.getImageList().test {
-            assertEquals(list, awaitItem())
-            awaitComplete()
+        repository.imageList.test {
+            assertEquals(LoadState.Loading(null), awaitItem())
+            assertEquals(LoadState.Success(list), awaitItem())
             assertEquals(listOf(list), cache.written)
         }
     }
@@ -122,60 +137,11 @@ class ImageRepositoryUnitTest {
         val list = listOf("1", "2", "3")
         val network = FakeNetworkDataSource(result = Result.success(list))
         val cache = FakeDiskCacheDataSource(throwOnWrite = IOException())
-        val repository = ImageRepository(network, cache)
+        val repository = ImageRepository(network, cache, backgroundScope)
 
-        repository.getImageList().test {
-            assertEquals(list, awaitItem())
-            awaitComplete()
-        }
-    }
-
-    @Test
-    fun `propagates network error`(): Unit = runTest {
-        val network = FakeNetworkDataSource(throwOnCall = IOException())
-        val cache = FakeDiskCacheDataSource()
-        val repository = ImageRepository(network, cache)
-
-        assertFailsWith<IOException> { repository.getImageList().toList() }
-    }
-
-    @Test
-    fun `propagates disk error`(): Unit = runTest {
-        val network = FakeNetworkDataSource()
-        val cache = FakeDiskCacheDataSource(throwOnRead = IOException())
-        val repository = ImageRepository(network, cache)
-
-        assertFailsWith<IOException> { repository.getImageList().toList() }
-    }
-
-    @Test
-    fun `each collection triggers new network call`(): Unit = runTest {
-        val list = listOf("1", "2", "3")
-        val network = FakeNetworkDataSource(result = Result.success(list))
-        val cache = FakeDiskCacheDataSource()
-        val repository = ImageRepository(network, cache)
-
-        repository.getImageList().toList()
-        repository.getImageList().toList()
-
-        assertEquals(2, network.callCount)
-    }
-
-    @Test
-    fun `network cancelled - emit cached`(): Unit = runTest {
-        val cachedList = listOf("1", "2")
-        val list = listOf("1", "2", "3")
-        val gate = CompletableDeferred<Unit>()
-        val network = FakeNetworkDataSource(result = Result.success(list), gate = gate)
-        val cache = FakeDiskCacheDataSource(cached = Result.success(cachedList))
-        val repository = ImageRepository(network, cache)
-
-        repository.getImageList().test {
-            assertEquals(cachedList, awaitItem())
-            cancel()
-            awaitError()
-
-            assert(network.cancelled)
+        repository.imageList.test {
+            assertEquals(LoadState.Loading(null), awaitItem())
+            assertEquals(LoadState.Success(list), awaitItem())
         }
     }
 }
