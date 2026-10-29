@@ -6,6 +6,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
@@ -134,6 +135,62 @@ class ImageRepositoryUnitTest {
         repository.imageList.test {
             assertEquals(LoadState.Loading(null), awaitItem())
             assertEquals(LoadState.Success(list), awaitItem())
+        }
+    }
+
+    @Test
+    fun `refresh, network ok - repeated network call`(): Unit = runTest {
+        val cachedList = listOf("1", "2")
+        val list = listOf("1", "2", "3")
+        val network = FakeNetworkDataSource(result = Result.success(list))
+        val cache = FakeDiskCacheDataSource(cached = Result.success(cachedList))
+        val repository = ImageRepository(network, cache, backgroundScope)
+
+        repository.imageList.test {
+            assertEquals(LoadState.Loading(null), awaitItem())
+            assertEquals(LoadState.Loading(cachedList), awaitItem())
+            assertEquals(LoadState.Success(list), awaitItem())
+            launch { repository.refresh() }
+            assertEquals(LoadState.Loading(list), awaitItem())
+            assertEquals(LoadState.Success(list), awaitItem())
+            assertEquals(listOf(list), cache.written)
+            assertEquals(2, network.callCount)
+        }
+    }
+
+    @Test
+    fun `refresh, network fail, cache ok - repeated network call, emit old cached data`(): Unit = runTest {
+        val cachedList = listOf("1", "2")
+        val network = FakeNetworkDataSource(result = Result.failure(IOException()))
+        val cache = FakeDiskCacheDataSource(cached = Result.success(cachedList))
+        val repository = ImageRepository(network, cache, backgroundScope)
+
+        repository.imageList.test {
+            assertEquals(LoadState.Loading(null), awaitItem())
+            assertEquals(LoadState.Loading(cachedList), awaitItem())
+            assertEquals(LoadState.Success(cachedList), awaitItem())
+            launch { repository.refresh() }
+            assertEquals(LoadState.Loading(cachedList), awaitItem())
+            assertEquals(LoadState.Success(cachedList), awaitItem())
+            assertEquals(2, network.callCount)
+        }
+    }
+
+    @Test
+    fun `refresh, network fail, cache fail - repeated network call, emit error`(): Unit = runTest {
+        val cachedList = listOf("1", "2")
+        val exception = IOException()
+        val network = FakeNetworkDataSource(result = Result.failure(exception))
+        val cache = FakeDiskCacheDataSource(cached = Result.failure(exception))
+        val repository = ImageRepository(network, cache, backgroundScope)
+
+        repository.imageList.test {
+            assertEquals(LoadState.Loading(null), awaitItem())
+            assertEquals(LoadState.Error<List<String>>(exception), awaitItem())
+            launch { repository.refresh() }
+            assertEquals(LoadState.Loading(null), awaitItem())
+            assertEquals(LoadState.Error<List<String>>(exception), awaitItem())
+            assertEquals(2, network.callCount)
         }
     }
 }

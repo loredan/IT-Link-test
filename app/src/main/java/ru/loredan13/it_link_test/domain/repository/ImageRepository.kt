@@ -3,11 +3,13 @@ package ru.loredan13.it_link_test.domain.repository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import ru.loredan13.it_link_test.domain.datasource.DiskCacheDataSource
 import ru.loredan13.it_link_test.domain.datasource.NetworkDataSource
 import ru.loredan13.it_link_test.domain.util.LoadState
+import ru.loredan13.it_link_test.domain.util.dataOrNull
 import ru.loredan13.it_link_test.domain.util.launchCatching
 import ru.loredan13.it_link_test.presentation.di.ApplicationScope
 import javax.inject.Inject
@@ -44,4 +46,23 @@ class ImageRepository @Inject constructor(
                 }
         }
     }
+
+    suspend fun refresh() {
+        _imageList.value = LoadState.Loading(_imageList.value.dataOrNull())
+
+        networkDataSource.getImageList()
+            .onSuccess { images ->
+                val oldImages = _imageList.value.dataOrNull()
+                _imageList.value = LoadState.Success(images)
+                if (images != oldImages) {
+                    runCatching { diskCacheDataSource.writeImageList(images) }
+                        .onFailure { if (it is CancellationException) throw it }
+                }
+            }
+            .onFailure { exception ->
+                _imageList.value = _imageList.value.dataOrNull()?.let { LoadState.Success(it) } ?: LoadState.Error(exception)
+            }
+    }
+
+
 }
