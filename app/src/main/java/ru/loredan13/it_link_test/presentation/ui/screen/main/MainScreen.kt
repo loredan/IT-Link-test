@@ -18,12 +18,16 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -42,11 +46,13 @@ import coil3.compose.AsyncImagePainter
 import coil3.compose.rememberAsyncImagePainter
 import coil3.request.ImageRequest
 import kotlinx.serialization.Serializable
+import retrofit2.HttpException
 import ru.loredan13.it_link_test.R
 import ru.loredan13.it_link_test.domain.util.LoadState
 import ru.loredan13.it_link_test.domain.util.dataOrNull
 import ru.loredan13.it_link_test.presentation.LocalNavController
 import ru.loredan13.it_link_test.presentation.ui.screen.image.ImageScreen
+import java.net.UnknownHostException
 
 private val MIN_CELL_SIZE = 100.dp
 
@@ -59,10 +65,13 @@ fun MainScreen(mainViewModel: MainViewModel = hiltViewModel()) {
     val context = LocalContext.current
     val navController = LocalNavController.current
 
+    val snackbarHostState = remember { SnackbarHostState() }
+
     Scaffold(
         topBar = {
             TopAppBar(title = { Text(stringResource(R.string.app_name)) })
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         rememberPullToRefreshState()
         val images by mainViewModel.imageList.collectAsState()
@@ -72,8 +81,17 @@ fun MainScreen(mainViewModel: MainViewModel = hiltViewModel()) {
                 .build()
         }
 
-        DisposableEffect(images) {
+        LaunchedEffect(images) {
             if (images is LoadState.Error) {
+                snackbarHostState.showSnackbar(
+                    message = (images as? LoadState.Error)?.error?.message ?: "Неизвестная ошибка",
+                    duration = SnackbarDuration.Short
+                )
+            }
+        }
+
+        DisposableEffect(images) {
+            if ((images as? LoadState.Error)?.error is UnknownHostException) {
                 val connectivityManager = context.getSystemService<ConnectivityManager>()
                 val networkCallback = object : ConnectivityManager.NetworkCallback() {
                     override fun onAvailable(network: Network) {
