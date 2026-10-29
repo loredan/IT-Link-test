@@ -9,6 +9,7 @@ import kotlinx.coroutines.launch
 import ru.loredan13.it_link_test.domain.datasource.DiskCacheDataSource
 import ru.loredan13.it_link_test.domain.datasource.network.NetworkDataSource
 import ru.loredan13.it_link_test.domain.util.LoadState
+import ru.loredan13.it_link_test.domain.util.launchCatching
 import ru.loredan13.it_link_test.presentation.di.ApplicationScope
 import javax.inject.Inject
 import kotlin.coroutines.ContinuationInterceptor
@@ -22,32 +23,27 @@ class ImageRepository @Inject constructor(
     val imageList = _imageList.asStateFlow()
 
     init {
-        println("repo init, dispatcher = " +
-                coroutineScope.coroutineContext[ContinuationInterceptor])
-        coroutineScope.launch {
-            println("loader started")
-            runCatching {
-                val networkDeferred = async { networkDataSource.getImageList() }
+        coroutineScope.launchCatching {
+            val networkDeferred = async { networkDataSource.getImageList() }
 
-                val cachedImages = diskCacheDataSource.getImageList().onSuccess { images ->
-                    if (images.isNotEmpty()) {
-                        _imageList.value = LoadState.Loading(images)
-                    }
-                }.getOrNull()
+            val cachedImages = diskCacheDataSource.getImageList().onSuccess { images ->
+                if (images.isNotEmpty()) {
+                    _imageList.value = LoadState.Loading(images)
+                }
+            }.getOrNull()
 
-                networkDeferred.await()
-                    .onSuccess { images ->
-                        _imageList.value = LoadState.Success(images)
-                        if (images != cachedImages) {
-                            runCatching { diskCacheDataSource.writeImageList(images) }
-                                .onFailure { if (it is CancellationException) throw it }
-                        }
+            networkDeferred.await()
+                .onSuccess { images ->
+                    _imageList.value = LoadState.Success(images)
+                    if (images != cachedImages) {
+                        runCatching { diskCacheDataSource.writeImageList(images) }
+                            .onFailure { if (it is CancellationException) throw it }
                     }
-                    .onFailure { exception ->
-                        _imageList.value = cachedImages?.let { LoadState.Success(it) }
-                            ?: LoadState.Error(exception)
-                    }
-            }.onFailure { if (it is CancellationException) throw it }
+                }
+                .onFailure { exception ->
+                    _imageList.value = cachedImages?.let { LoadState.Success(it) }
+                        ?: LoadState.Error(exception)
+                }
         }
     }
 }

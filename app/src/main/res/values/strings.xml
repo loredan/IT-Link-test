@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">IT-Link Test</string>
+
+    <string name="link_copied">Ссылка скопирована</string>
+    <string name="link_not_copied">Не удалось скопировать ссылку</string>
+    <string name="image_share_error">Не удалось поделиться изображением</string>
 </resources>
