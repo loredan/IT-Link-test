@@ -10,6 +10,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -30,16 +32,21 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -119,7 +126,8 @@ fun ImageScreen(args: ImageScreen, imageViewModel: ImageViewModel = hiltViewMode
 
                         is AsyncImagePainter.State.Success -> {
                             IconButton(onClick = {
-                                val currentImageLink = images.dataOrNull()?.get(pagerState.currentPage)
+                                val currentImageLink =
+                                    images.dataOrNull()?.get(pagerState.currentPage)
                                 if (currentImageLink != null) {
                                     context.startActivity(
                                         Intent(
@@ -135,7 +143,9 @@ fun ImageScreen(args: ImageScreen, imageViewModel: ImageViewModel = hiltViewMode
                                 )
                             }
 
-                            IconButton(onClick = {val currentImageLink = images.dataOrNull()?.get(pagerState.currentPage)
+                            IconButton(onClick = {
+                                val currentImageLink =
+                                    images.dataOrNull()?.get(pagerState.currentPage)
                                 if (currentImageLink != null) {
                                     val intent = Intent(Intent.ACTION_SEND)
                                     intent.type = "text/plain"
@@ -182,14 +192,97 @@ fun ImageScreen(args: ImageScreen, imageViewModel: ImageViewModel = hiltViewMode
             )
             val imageState by imagePainter.state.collectAsState()
 
+            var containerSize by remember { mutableStateOf(IntSize.Zero) }
+
+            var scale by remember { mutableFloatStateOf(1f) }
+            var offset by remember { mutableStateOf(Offset.Zero) }
+            val transformableState =
+                rememberTransformableState { _, zoomChange, panChange, _ ->
+                    scale = (scale * zoomChange).coerceAtLeast(1f)
+                    offset += panChange
+
+                    val imageWidth =
+                        (imageState as? AsyncImagePainter.State.Success)?.result?.image?.width
+                    val imageHeight =
+                        (imageState as? AsyncImagePainter.State.Success)?.result?.image?.height
+
+                    if (imageWidth == null || imageHeight == null || imageWidth <= 0 || imageHeight <= 0 || containerSize == IntSize.Zero)
+                        return@rememberTransformableState
+
+                    val initialScale =
+                        if (imageWidth.toFloat() / imageHeight < containerSize.width.toFloat() / containerSize.height) {
+                            containerSize.height / imageHeight.toFloat()
+                        } else {
+                            containerSize.width / imageWidth.toFloat()
+                        }
+
+
+                    // Сброс на середину по горизонтали при малом масштабе
+                    if (initialScale * scale < containerSize.width.toFloat() / imageWidth) {
+                        offset = offset.copy(x = 0f)
+                    }
+                    // Прилипание к левой границе контейнера
+                    else if (offset.x + containerSize.width / 2 - imageWidth / 2 * initialScale * scale > 0) {
+                        offset =
+                            offset.copy(x = imageWidth / 2 * initialScale * scale - containerSize.width / 2)
+                    }
+                    // Прилипание к правой границе контейнера
+                    else if (offset.x + containerSize.width / 2 + imageWidth / 2 * initialScale * scale < containerSize.width) {
+                        offset =
+                            offset.copy(x = containerSize.width / 2 - imageWidth / 2 * initialScale * scale)
+                    }
+
+                    // Сброс на середину по вертикали при малом масштабе
+                    if (initialScale * scale < containerSize.height.toFloat() / imageHeight) {
+                        offset = offset.copy(y = 0f)
+                    }
+                    // Прилипание к верхней границе контейнера
+                    else if (offset.y + containerSize.height / 2 - imageHeight / 2 * initialScale * scale > 0) {
+                        offset =
+                            offset.copy(y = imageHeight / 2 * initialScale * scale - containerSize.height / 2)
+                    }
+                    // Прилипание к нижней границе контейнера
+                    else if (offset.y + containerSize.height / 2 + imageHeight / 2 * initialScale * scale < containerSize.height) {
+                        offset =
+                            offset.copy(y = containerSize.height / 2 - imageHeight / 2 * initialScale * scale)
+                    }
+                }
+
             Image(
                 painter = imagePainter,
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .clickable {
+                    .onGloballyPositioned { containerSize = it.size }
+                    .clickable(interactionSource = null, indication = null) {
                         fullScreen = !fullScreen
-                    },
+                    }
+                    .transformable(state = transformableState, canPan = { panOffset ->
+                        val imageWidth =
+                            (imageState as? AsyncImagePainter.State.Success)?.result?.image?.width
+                        val imageHeight =
+                            (imageState as? AsyncImagePainter.State.Success)?.result?.image?.height
+
+                        if (imageWidth == null || imageHeight == null || imageWidth <= 0 || imageHeight <= 0 || containerSize == IntSize.Zero)
+                            return@transformable false
+
+                        val initialScale =
+                            if (imageWidth / imageHeight < containerSize.width / containerSize.height) {
+                                containerSize.height / imageHeight.toFloat()
+                            } else {
+                                containerSize.width / imageWidth.toFloat()
+                            }
+
+                        // Проверка левой и правой границы картинки для работы перелистывания
+                        !(initialScale * scale > containerSize.width / imageWidth && (offset.x + panOffset.x + containerSize.width / 2 - imageWidth / 2 * initialScale * scale >= 0 ||
+                                offset.x + panOffset.x + containerSize.width / 2 + imageWidth / 2 * initialScale * scale <= containerSize.width))
+                    })
+                    .graphicsLayer(
+                        scaleX = scale,
+                        scaleY = scale,
+                        translationX = offset.x,
+                        translationY = offset.y,
+                    ),
                 contentScale = ContentScale.Fit
             )
 
@@ -197,10 +290,6 @@ fun ImageScreen(args: ImageScreen, imageViewModel: ImageViewModel = hiltViewMode
                 pagerState.currentPage,
                 imageState
             ) {
-                Log.wtf(
-                    "WTF",
-                    "current: ${pagerState.currentPage}, this: ${index}, state: ${imageState}"
-                )
                 if (pagerState.currentPage == index) {
                     currentImageState = imageState
                     refreshCurrentImage = { imagePainter.restart() }
