@@ -53,16 +53,16 @@ dependencies {
     ksp(libs.hilt.android.compiler)
     implementation(libs.hilt.navigation.compose)
 
-    implementation(libs.ktor.client.core)
-    implementation(libs.ktor.client.okhttp)
-    implementation(libs.ktor.client.logging)
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.converter.scalars)
+    implementation(libs.retrofit.adapters.result)
 
     implementation(libs.navigation.compose)
     implementation(libs.serialization.json)
 
     implementation(libs.coil.compose)
     implementation(libs.coil.gif)
-    implementation(libs.coil.network.ktor)
+    implementation(libs.coil.network.okhttp)
 
     testImplementation(kotlin("test"))
     testImplementation(libs.junit)

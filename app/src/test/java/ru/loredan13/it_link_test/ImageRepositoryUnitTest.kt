@@ -4,24 +4,16 @@ import app.cash.turbine.test
 import junit.framework.TestCase.assertEquals
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.asFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import org.junit.Test
 import ru.loredan13.it_link_test.domain.datasource.DiskCacheDataSource
-import ru.loredan13.it_link_test.domain.datasource.network.NetworkDataSource
+import ru.loredan13.it_link_test.domain.datasource.NetworkDataSource
 import ru.loredan13.it_link_test.domain.repository.ImageRepository
 import ru.loredan13.it_link_test.domain.util.LoadState
 import java.io.IOException
-import kotlin.test.assertFailsWith
 import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalCoroutinesApi::class)

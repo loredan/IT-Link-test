@@ -1,19 +1,17 @@
 package ru.loredan13.it_link_test.domain
 
+import dagger.Binds
 import dagger.Module
-import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import ru.loredan13.it_link_test.domain.datasource.network.NetworkDataSource
-import ru.loredan13.it_link_test.domain.datasource.network.NetworkDataSourceImpl
-import ru.loredan13.it_link_test.domain.datasource.network.NetworkLogger
+import ru.loredan13.it_link_test.domain.datasource.NetworkDataSource
+import ru.loredan13.it_link_test.domain.datasource.NetworkDataSourceImpl
 import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
-object DomainModule {
-    @Provides
+abstract class DomainModule {
+    @Binds
     @Singleton
-    fun providesNetworkDataSource(networkLogger: NetworkLogger): NetworkDataSource =
-        NetworkDataSourceImpl(networkLogger)
+    abstract fun bindNetworkDataSource(impl: NetworkDataSourceImpl): NetworkDataSource
 }
